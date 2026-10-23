@@ -12,8 +12,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -40,7 +38,6 @@ public final class MoreModules {
         Modules.ALL.add(new AntiAFK());
         Modules.ALL.add(new AutoTool());
         Modules.ALL.add(new Zoom());
-        Modules.ALL.add(new OreESP());
     }
 
     static Vec3 moveVec(double speed) {
@@ -264,45 +261,6 @@ public final class MoreModules {
         @Override public void onDisable() {
             if (old > 0) mc.options.fov().set(old);
             old = -1;
-        }
-    }
-
-    public static class OreESP extends Module {
-        record Ore(BlockPos pos, int color) {}
-        static final Map<Block, Integer> ORES = new HashMap<>();
-        static {
-            ORES.put(Blocks.DIAMOND_ORE, 0xFF55FFFF); ORES.put(Blocks.DEEPSLATE_DIAMOND_ORE, 0xFF55FFFF);
-            ORES.put(Blocks.ANCIENT_DEBRIS, 0xFFAA5522);
-            ORES.put(Blocks.EMERALD_ORE, 0xFF22DD44); ORES.put(Blocks.DEEPSLATE_EMERALD_ORE, 0xFF22DD44);
-            ORES.put(Blocks.GOLD_ORE, 0xFFFFDD33); ORES.put(Blocks.DEEPSLATE_GOLD_ORE, 0xFFFFDD33);
-            ORES.put(Blocks.IRON_ORE, 0xFFDDBBAA); ORES.put(Blocks.DEEPSLATE_IRON_ORE, 0xFFDDBBAA);
-            ORES.put(Blocks.LAPIS_ORE, 0xFF3355FF); ORES.put(Blocks.DEEPSLATE_LAPIS_ORE, 0xFF3355FF);
-            ORES.put(Blocks.SPAWNER, 0xFFFF2222);
-        }
-        final Setting radius = num("Radius", 12, 4, 24);
-        List<Ore> found = new ArrayList<>();
-        int t;
-        OreESP() { super("OreESP", "Render"); }
-
-        @Override public void onTick() {
-            if (mc.player == null || mc.level == null || t++ % 40 != 0) return;
-            List<Ore> list = new ArrayList<>();
-            int r = (int) radius.num();
-            BlockPos o = mc.player.blockPosition();
-            BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
-            for (int x = -r; x <= r; x++) for (int y = -r; y <= r; y++) for (int z = -r; z <= r; z++) {
-                p.set(o.getX() + x, o.getY() + y, o.getZ() + z);
-                Integer c = ORES.get(mc.level.getBlockState(p).getBlock());
-                if (c != null) list.add(new Ore(p.immutable(), c));
-            }
-            found = list;
-        }
-
-        @Override public void onRender(GuiGraphics g, float pt) {
-            for (Ore ore : found) {
-                double[] r = Draw.rect(new AABB(ore.pos()), g, pt);
-                if (r != null) Draw.outline(g, r, ore.color());
-            }
         }
     }
 }

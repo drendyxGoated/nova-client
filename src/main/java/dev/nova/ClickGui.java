@@ -9,10 +9,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ClickGui extends Screen {
-    private static final int W = 110, ROW = 14, ACCENT = 0xFF5B8CFF;
+    private static final int W = 100, ROW = 14, ACCENT = 0xFF5B8CFF;
 
     private record Hit(int x, int y, int w, int h, Module m, Setting s) {}
     private final List<Hit> hits = new ArrayList<>();
+    private double scroll = 0;
 
     public ClickGui() { super(Component.literal("Nova")); }
 
@@ -20,12 +21,17 @@ public class ClickGui extends Screen {
 
     @Override public void removed() { Config.save(); }
 
+    @Override public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        scroll = Math.min(0, scroll + scrollY * 18);
+        return true;
+    }
+
     @Override public void render(GuiGraphics g, int mouseX, int mouseY, float delta) {
         g.fill(0, 0, width, height, 0x66000000);
         hits.clear();
-        int px = 20;
+        int px = 8;
         for (String cat : Modules.categories()) {
-            int y = 20;
+            int y = 14 + (int) scroll;
             g.fill(px, y, px + W, y + ROW + 2, ACCENT);
             g.drawString(font, cat, px + 5, y + 4, 0xFFFFFFFF);
             y += ROW + 2;
@@ -53,7 +59,7 @@ public class ClickGui extends Screen {
                     }
                 }
             }
-            px += W + 10;
+            px += W + 6;
         }
     }
 
