@@ -36,6 +36,7 @@ public final class Modules {
     private Modules() {}
 
     public static final List<Module> ALL = new ArrayList<>();
+    public static ClientSettings CLIENT;
 
     public static void init() {
         ALL.add(new KillAura());
@@ -48,10 +49,13 @@ public final class Modules {
         ALL.add(new AutoSprint());
         MoreModules.register();
         ExtraModules.register();
+        NewModules.register();
+        CLIENT = new ClientSettings();
+        ALL.add(CLIENT);
     }
 
     public static List<String> categories() {
-        return List.of("Combat", "Movement", "Player", "Render", "World", "Misc", "HUD");
+        return List.of("Combat", "Movement", "Player", "Render", "World", "Misc", "HUD", "Settings");
     }
 
     // ---------- helpers ----------

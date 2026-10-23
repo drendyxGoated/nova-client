@@ -15,7 +15,7 @@ public final class Config {
     public static void save() {
         Properties p = new Properties();
         for (Module m : Modules.ALL) {
-            p.setProperty(m.name + ".enabled", String.valueOf(m.enabled));
+            if (m.persistEnabled && !m.hidden) p.setProperty(m.name + ".enabled", String.valueOf(m.enabled));
             for (Setting s : m.settings) p.setProperty(m.name + "." + s.name, String.valueOf(s.value));
         }
         try (OutputStream out = Files.newOutputStream(file())) { p.store(out, "Nova config"); }
@@ -28,7 +28,8 @@ public final class Config {
         try (InputStream in = Files.newInputStream(file())) { p.load(in); }
         catch (Exception e) { System.err.println("[Nova] load failed: " + e); return; }
         for (Module m : Modules.ALL) {
-            m.enabled = Boolean.parseBoolean(p.getProperty(m.name + ".enabled", String.valueOf(m.enabled)));
+            if (m.persistEnabled && !m.hidden)
+                m.enabled = Boolean.parseBoolean(p.getProperty(m.name + ".enabled", String.valueOf(m.enabled)));
             for (Setting s : m.settings) {
                 try { s.value = Double.parseDouble(p.getProperty(m.name + "." + s.name, String.valueOf(s.value))); }
                 catch (NumberFormatException ignored) {}

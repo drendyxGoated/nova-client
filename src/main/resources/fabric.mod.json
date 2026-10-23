@@ -3,9 +3,10 @@
   "id": "nova",
   "version": "${version}",
   "name": "Nova Client",
-  "description": "Utility client with ESP, KillAura, StashFinder and a ClickGUI.",
+  "description": "Utility client with ESP, bots, stash/sus-chunk finders and a themed ClickGUI.",
   "environment": "client",
   "entrypoints": { "client": ["dev.nova.Nova"] },
+  "mixins": ["nova.mixins.json"],
   "depends": {
     "fabricloader": ">=0.16.0",
     "minecraft": "~1.21.11",

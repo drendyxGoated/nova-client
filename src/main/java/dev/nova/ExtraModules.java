@@ -457,7 +457,7 @@ public final class ExtraModules {
                 lines.add("Totems " + n);
             }
             if (clock.on()) lines.add(java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
-            int y = 16;
+            int y = 22;
             for (String l : lines) { g.drawString(mc.font, l, 4, y, 0xFFFFFFFF); y += 10; }
         }
     }
@@ -475,7 +475,7 @@ public final class ExtraModules {
         }
 
         @Override public void onRender(GuiGraphics g, float pt) {
-            int s = (int) size.num(), x0 = 6, y0 = 100, half = s / 2, cx = x0 + half, cy = y0 + half;
+            int s = (int) size.num(), x0 = 6, y0 = 120, half = s / 2, cx = x0 + half, cy = y0 + half;
             g.fill(x0, y0, x0 + s, y0 + s, 0x88000000);
             g.fill(x0, y0, x0 + s, y0 + 1, 0xFF5B8CFF); g.fill(x0, y0 + s - 1, x0 + s, y0 + s, 0xFF5B8CFF);
             g.fill(x0, y0, x0 + 1, y0 + s, 0xFF5B8CFF); g.fill(x0 + s - 1, y0, x0 + s, y0 + s, 0xFF5B8CFF);
