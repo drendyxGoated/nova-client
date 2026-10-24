@@ -2,6 +2,8 @@ package dev.nova;
 
 import com.mojang.authlib.GameProfile;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.core.BlockPos;
@@ -55,20 +57,38 @@ public final class NewModules {
     }
 
     // ======================= FREECAM =======================
-    /** Detaches the camera; your real player is frozen in place by LocalPlayerMixin while this is on. */
+    /** Camera entity that reads its rotation straight from your player every frame, so turning has zero lag. */
+    static class CamEntity extends RemotePlayer {
+        CamEntity(ClientLevel level, GameProfile profile) { super(level, profile); }
+        @Override public float getViewYRot(float pt) {
+            var p = Minecraft.getInstance().player;
+            return p == null ? super.getViewYRot(pt) : p.getViewYRot(pt);
+        }
+        @Override public float getViewXRot(float pt) {
+            var p = Minecraft.getInstance().player;
+            return p == null ? super.getViewXRot(pt) : p.getViewXRot(pt);
+        }
+    }
+
+    /**
+     * Detaches the camera; your real player is frozen in place by LocalPlayerMixin while this is on.
+     * Movement has acceleration/deceleration and flies where you look. Sprint key = 2x boost.
+     */
     public static class Freecam extends Module {
         public static boolean active;
-        final Setting speed = num("Speed", 1.0, 0.2, 5.0);
-        RemotePlayer cam;
+        final Setting speed = num("Speed", 0.8, 0.1, 5.0);
+        final Setting smooth = num("Smoothness", 0.3, 0.05, 1.0);
+        final Setting lookFly = bool("Fly where you look", true);
+        CamEntity cam;
+        Vec3 vel = Vec3.ZERO;
 
         Freecam() { super("Freecam", "Render"); persistEnabled = false; }
 
         @Override public void onEnable() {
             if (mc.player == null || mc.level == null) { enabled = false; return; }
-            cam = new RemotePlayer(mc.level, new GameProfile(UUID.randomUUID(), "Freecam"));
+            cam = new CamEntity(mc.level, new GameProfile(UUID.randomUUID(), "Freecam"));
             cam.copyPosition(mc.player);
-            cam.setYRot(mc.player.getYRot());
-            cam.setXRot(mc.player.getXRot());
+            vel = Vec3.ZERO;
             active = true;
             mc.setCameraEntity(cam);
         }
@@ -76,15 +96,22 @@ public final class NewModules {
         @Override public void onTick() {
             if (cam == null || mc.player == null) return;
             cam.xo = cam.getX(); cam.yo = cam.getY(); cam.zo = cam.getZ();
-            Vec3 h = MoreModules.moveVec(speed.num());
-            double y = 0;
-            if (mc.options.keyJump.isDown()) y += speed.num() * 0.6;
-            if (mc.options.keyShift.isDown()) y -= speed.num() * 0.6;
-            cam.setPos(cam.getX() + h.x, cam.getY() + y, cam.getZ() + h.z);
-            cam.setYRot(mc.player.getYRot());
-            cam.setXRot(mc.player.getXRot());
-            cam.yRotO = cam.getYRot();
-            cam.xRotO = cam.getXRot();
+
+            var o = mc.options;
+            double f = (o.keyUp.isDown() ? 1 : 0) - (o.keyDown.isDown() ? 1 : 0);
+            double s = (o.keyLeft.isDown() ? 1 : 0) - (o.keyRight.isDown() ? 1 : 0);
+            double v = (o.keyJump.isDown() ? 1 : 0) - (o.keyShift.isDown() ? 1 : 0);
+            double yr = Math.toRadians(mc.player.getYRot());
+            double pr = lookFly.on() ? Math.toRadians(mc.player.getXRot()) : 0;
+            Vec3 fwd = new Vec3(-Math.sin(yr) * Math.cos(pr), -Math.sin(pr), Math.cos(yr) * Math.cos(pr));
+            Vec3 left = new Vec3(Math.cos(yr), 0, Math.sin(yr));
+
+            Vec3 target = fwd.scale(f).add(left.scale(s)).add(0, v, 0);
+            if (target.lengthSqr() > 1) target = target.normalize();
+            target = target.scale(speed.num() * (o.keySprint.isDown() ? 2.0 : 1.0));
+
+            vel = vel.add(target.subtract(vel).scale(smooth.num()));
+            cam.setPos(cam.getX() + vel.x, cam.getY() + vel.y, cam.getZ() + vel.z);
         }
 
         @Override public void onDisable() {
@@ -119,7 +146,7 @@ public final class NewModules {
         }
 
         final Setting minScore = num("Min score", 14, 3, 100);
-        final Setting perTick = num("Chunks per tick", 2, 1, 8);
+        final Setting perTick = num("Chunks per tick", 1, 1, 3);
         final Setting redstone = bool("Redstone / pistons", true);
         final Setting lights = bool("Torches / lanterns", true);
         final Setting utility = bool("Glass / utility blocks", true);

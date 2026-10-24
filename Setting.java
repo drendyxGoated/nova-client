@@ -8,6 +8,7 @@ public class ClientSettings extends Module {
     final Setting radius = num("Corner radius", 3, 0, 6);
     final Setting rowSize = mode("Row size", 1, "Compact", "Normal", "Large");
     final Setting humanize = bool("Humanize bots/aura", true);
+    final Setting maxShapes = num("Max ESP shapes", 150, 30, 500);
     final Setting anims = bool("Animations", true);
     final Setting dim = bool("Dim background", true);
     final Setting notifs = bool("Notifications", true);

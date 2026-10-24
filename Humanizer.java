@@ -65,6 +65,8 @@ public final class Modules {
             Module.mc.player.displayClientMessage(Component.literal("§2[Krypton]§r " + msg), false);
     }
 
+    static int cap() { return CLIENT == null ? 150 : (int) CLIENT.maxShapes.num(); }
+
     static String dim() {
         String d = Module.mc.level.dimension().toString();
         return d.contains("nether") ? "Nether" : d.contains("the_end") ? "End" : "Overworld";
@@ -246,12 +248,15 @@ public final class Modules {
         }
 
         @Override public void onRender(GuiGraphics g, float pt) {
+            int drawn = 0;
             for (Entity e : mc.level.entitiesForRendering()) {
                 if (e == mc.player || !filter.accepts(e)) continue;
                 double dist = mc.player.distanceTo(e);
                 if (dist > range.num()) continue;
+                if (drawn >= cap()) break;
                 double[] r = Draw.rect(e.getBoundingBox(), g, pt);
                 if (r == null) continue;
+                drawn++;
                 int color = Targets.color(Targets.kind(e));
                 Draw.outline(g, r, color);
                 if (labels.on())
@@ -276,8 +281,11 @@ public final class Modules {
 
         @Override public void onRender(GuiGraphics g, float pt) {
             double max = range.num() * range.num();
+            int drawn = 0;
             for (BlockEntity be : cache) {
+                if (drawn >= cap()) break;
                 if (be.isRemoved() || be.getBlockPos().distSqr(mc.player.blockPosition()) > max) continue;
+                drawn++;
                 double[] r = Draw.rect(new AABB(be.getBlockPos()), g, pt);
                 if (r != null) Draw.outline(g, r, storageColor(be));
             }
@@ -294,8 +302,10 @@ public final class Modules {
 
         @Override public void onRender(GuiGraphics g, float pt) {
             double cx = g.guiWidth() / 2.0, cy = g.guiHeight() / 2.0;
+            int drawn = 0;
             for (Entity e : mc.level.entitiesForRendering()) {
                 if (e == mc.player || !filter.accepts(e)) continue;
+                if (drawn++ >= 40) break;
                 double[] s = Draw.project(e.getBoundingBox().getCenter(), g, pt);
                 if (s == null) continue;
                 int c = (Targets.color(Targets.kind(e)) & 0x00FFFFFF) | 0xCC000000;

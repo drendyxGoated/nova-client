@@ -26,7 +26,13 @@ public abstract class Module {
 
     public void toggle() {
         enabled = !enabled;
-        if (enabled) onEnable(); else onDisable();
+        try {
+            if (enabled) onEnable(); else onDisable();
+        } catch (Throwable t) {
+            enabled = false;
+            System.err.println("[Krypton] " + name + " failed to toggle: " + t);
+            t.printStackTrace();
+        }
         Notifications.module(this);
     }
 

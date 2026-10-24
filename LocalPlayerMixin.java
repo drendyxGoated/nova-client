@@ -33,8 +33,14 @@ public class Nova implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
             while (openGui.consumeClick()) mc.setScreen(new ClickGui());
             binds.forEach((m, k) -> { while (k.consumeClick()) m.toggle(); });
-            if (mc.player == null || mc.level == null) return;
-            for (Module m : Modules.ALL) if (m.enabled) m.onTick();
+            if (mc.player == null || mc.level == null) {
+                // left the world: stop one-shot bots/camera so they can't carry over
+                NewModules.Freecam.active = false;
+                for (Module m : Modules.ALL)
+                    if (!m.persistEnabled && m.enabled) { m.enabled = false; try { m.onDisable(); } catch (Throwable ignored) {} }
+                return;
+            }
+            for (Module m : Modules.ALL) if (m.enabled) safeTick(m);
         });
 
         ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> Config.save());
@@ -44,8 +50,9 @@ public class Nova implements ClientModInitializer {
             if (mc.player == null || mc.level == null || mc.options.hideGui) return;
             float pt = tracker.getGameTimeDeltaPartialTick(false);
 
-            for (Module m : Modules.ALL) if (m.enabled) m.onRender(g, pt);
+            for (Module m : Modules.ALL) if (m.enabled) safeRender(m, g, pt);
 
+            try {
             ClientSettings cs = Modules.CLIENT;
             int accent = Theme.accent(), accent2 = Theme.accent2();
 
@@ -59,7 +66,26 @@ public class Nova implements ClientModInitializer {
 
             if (cs.arrayOn.on()) drawModuleList(g, mc, cs, accent, accent2);
             Notifications.render(g, mc);
+            } catch (Throwable t) { System.err.println("[Krypton] HUD error: " + t); }
         });
+    }
+
+    // A bug in one module must never take the whole game down: turn that module off and keep going.
+    private static void safeTick(Module m) {
+        try { m.onTick(); } catch (Throwable t) { fail(m, "tick", t); }
+    }
+
+    private static void safeRender(Module m, GuiGraphics g, float pt) {
+        try { m.onRender(g, pt); } catch (Throwable t) { fail(m, "render", t); }
+    }
+
+    private static void fail(Module m, String where, Throwable t) {
+        m.enabled = false;
+        try { m.onDisable(); } catch (Throwable ignored) {}
+        System.err.println("[Krypton] " + m.name + " crashed in " + where + ": " + t);
+        t.printStackTrace();
+        Notifications.push(m.name + " turned off (error)", 0xFFFF5555);
+        Modules.chat("§c" + m.name + " hit an error in " + where + " and was turned off (" + t.getClass().getSimpleName() + ")");
     }
 
     private static void drawModuleList(GuiGraphics g, Minecraft mc, ClientSettings cs, int accent, int accent2) {
