@@ -255,8 +255,10 @@ public final class ExtraModules {
         }
 
         @Override public void onRender(GuiGraphics g, float pt) {
+            int drawn = 0;
             for (Entity e : mc.level.entitiesForRendering()) {
                 if (!(e instanceof ItemEntity ie) || mc.player.distanceTo(e) > range.num()) continue;
+                if (drawn++ >= Modules.cap()) break;
                 ItemStack st = ie.getItem();
                 boolean v = valuable(st);
                 if (valuables.on() && !v) continue;
@@ -299,18 +301,33 @@ public final class ExtraModules {
 
         void put(Setting s, int color, Block... blocks) { for (Block b : blocks) map.put(b, new Entry(s, color)); }
 
+        int sx = Integer.MIN_VALUE, rr;
+        BlockPos origin;
+        List<Ore> building = new ArrayList<>();
+
+        /** Scans one x-slice per tick so there's never a big lag spike, then keeps the nearest ores. */
         @Override public void onTick() {
-            if (mc.player == null || mc.level == null || t++ % 40 != 0) return;
-            List<Ore> list = new ArrayList<>();
-            int r = (int) radius.num();
-            BlockPos o = mc.player.blockPosition();
-            BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
-            for (int x = -r; x <= r; x++) for (int y = -r; y <= r; y++) for (int z = -r; z <= r; z++) {
-                p.set(o.getX() + x, o.getY() + y, o.getZ() + z);
-                Entry en = map.get(mc.level.getBlockState(p).getBlock());
-                if (en != null && en.s().on()) list.add(new Ore(p.immutable(), en.color()));
+            if (mc.player == null || mc.level == null) return;
+            if (sx == Integer.MIN_VALUE) {
+                if (t++ % 40 != 0) return;
+                origin = mc.player.blockPosition();
+                rr = (int) radius.num();
+                sx = -rr;
+                building = new ArrayList<>();
             }
-            found = list;
+            BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+            for (int y = -rr; y <= rr; y++) for (int z = -rr; z <= rr; z++) {
+                p.set(origin.getX() + sx, origin.getY() + y, origin.getZ() + z);
+                Entry en = map.get(mc.level.getBlockState(p).getBlock());
+                if (en != null && en.s().on()) building.add(new Ore(p.immutable(), en.color()));
+            }
+            if (++sx > rr) {
+                final BlockPos o = origin;
+                building.sort(Comparator.comparingDouble(ore -> ore.pos().distSqr(o)));
+                int cap = Modules.cap();
+                found = building.size() > cap ? new ArrayList<>(building.subList(0, cap)) : building;
+                sx = Integer.MIN_VALUE;
+            }
         }
 
         @Override public void onRender(GuiGraphics g, float pt) {
@@ -365,7 +382,7 @@ public final class ExtraModules {
             }
             if (why != null) {
                 enabled = false;
-                mc.player.connection.getConnection().disconnect(Component.literal("[Nova] AutoLog: " + why));
+                mc.player.connection.getConnection().disconnect(Component.literal("[Krypton] AutoLog: " + why));
             }
         }
     }

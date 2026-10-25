@@ -2,6 +2,8 @@ package dev.nova;
 
 import com.mojang.authlib.GameProfile;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.core.BlockPos;
@@ -55,20 +57,38 @@ public final class NewModules {
     }
 
     // ======================= FREECAM =======================
-    /** Detaches the camera; your real player is frozen in place by LocalPlayerMixin while this is on. */
+    /** Camera entity that reads its rotation straight from your player every frame, so turning has zero lag. */
+    static class CamEntity extends RemotePlayer {
+        CamEntity(ClientLevel level, GameProfile profile) { super(level, profile); }
+        @Override public float getViewYRot(float pt) {
+            var p = Minecraft.getInstance().player;
+            return p == null ? super.getViewYRot(pt) : p.getViewYRot(pt);
+        }
+        @Override public float getViewXRot(float pt) {
+            var p = Minecraft.getInstance().player;
+            return p == null ? super.getViewXRot(pt) : p.getViewXRot(pt);
+        }
+    }
+
+    /**
+     * Detaches the camera; your real player is frozen in place by LocalPlayerMixin while this is on.
+     * Movement has acceleration/deceleration and flies where you look. Sprint key = 2x boost.
+     */
     public static class Freecam extends Module {
         public static boolean active;
-        final Setting speed = num("Speed", 1.0, 0.2, 5.0);
-        RemotePlayer cam;
+        final Setting speed = num("Speed", 0.8, 0.1, 5.0);
+        final Setting smooth = num("Smoothness", 0.3, 0.05, 1.0);
+        final Setting lookFly = bool("Fly where you look", true);
+        CamEntity cam;
+        Vec3 vel = Vec3.ZERO;
 
         Freecam() { super("Freecam", "Render"); persistEnabled = false; }
 
         @Override public void onEnable() {
             if (mc.player == null || mc.level == null) { enabled = false; return; }
-            cam = new RemotePlayer(mc.level, new GameProfile(UUID.randomUUID(), "Freecam"));
+            cam = new CamEntity(mc.level, new GameProfile(UUID.randomUUID(), "Freecam"));
             cam.copyPosition(mc.player);
-            cam.setYRot(mc.player.getYRot());
-            cam.setXRot(mc.player.getXRot());
+            vel = Vec3.ZERO;
             active = true;
             mc.setCameraEntity(cam);
         }
@@ -76,15 +96,22 @@ public final class NewModules {
         @Override public void onTick() {
             if (cam == null || mc.player == null) return;
             cam.xo = cam.getX(); cam.yo = cam.getY(); cam.zo = cam.getZ();
-            Vec3 h = MoreModules.moveVec(speed.num());
-            double y = 0;
-            if (mc.options.keyJump.isDown()) y += speed.num() * 0.6;
-            if (mc.options.keyShift.isDown()) y -= speed.num() * 0.6;
-            cam.setPos(cam.getX() + h.x, cam.getY() + y, cam.getZ() + h.z);
-            cam.setYRot(mc.player.getYRot());
-            cam.setXRot(mc.player.getXRot());
-            cam.yRotO = cam.getYRot();
-            cam.xRotO = cam.getXRot();
+
+            var o = mc.options;
+            double f = (o.keyUp.isDown() ? 1 : 0) - (o.keyDown.isDown() ? 1 : 0);
+            double s = (o.keyLeft.isDown() ? 1 : 0) - (o.keyRight.isDown() ? 1 : 0);
+            double v = (o.keyJump.isDown() ? 1 : 0) - (o.keyShift.isDown() ? 1 : 0);
+            double yr = Math.toRadians(mc.player.getYRot());
+            double pr = lookFly.on() ? Math.toRadians(mc.player.getXRot()) : 0;
+            Vec3 fwd = new Vec3(-Math.sin(yr) * Math.cos(pr), -Math.sin(pr), Math.cos(yr) * Math.cos(pr));
+            Vec3 left = new Vec3(Math.cos(yr), 0, Math.sin(yr));
+
+            Vec3 target = fwd.scale(f).add(left.scale(s)).add(0, v, 0);
+            if (target.lengthSqr() > 1) target = target.normalize();
+            target = target.scale(speed.num() * (o.keySprint.isDown() ? 2.0 : 1.0));
+
+            vel = vel.add(target.subtract(vel).scale(smooth.num()));
+            cam.setPos(cam.getX() + vel.x, cam.getY() + vel.y, cam.getZ() + vel.z);
         }
 
         @Override public void onDisable() {
@@ -119,7 +146,7 @@ public final class NewModules {
         }
 
         final Setting minScore = num("Min score", 14, 3, 100);
-        final Setting perTick = num("Chunks per tick", 2, 1, 8);
+        final Setting perTick = num("Chunks per tick", 1, 1, 3);
         final Setting redstone = bool("Redstone / pistons", true);
         final Setting lights = bool("Torches / lanterns", true);
         final Setting utility = bool("Glass / utility blocks", true);
@@ -254,7 +281,7 @@ public final class NewModules {
         final Setting interval = num("Interval (sec)", 30, 2, 600);
         final Setting price = num("Price", 100000, 0, 10_000_000);
         final Setting spawners = bool("Only spawners", true);
-        int t;
+        int t, nextAt = 600;
 
         SellBot() {
             super("SellBot", "Player");
@@ -262,12 +289,13 @@ public final class NewModules {
             price.step = 1000;
         }
 
-        @Override public void onEnable() { t = (int) (interval.num() * 20) - 20; }
+        @Override public void onEnable() { nextAt = (int) (interval.num() * 20); t = nextAt - 20; }
 
         @Override public void onTick() {
             if (mc.player == null || mc.player.connection == null || mc.gameMode == null || mc.screen != null) return;
-            if (++t < interval.num() * 20) return;
+            if (++t < nextAt) return;
             t = 0;
+            nextAt = (int) (interval.num() * 20 * (Humanizer.on() ? 0.85 + Humanizer.R.nextDouble() * 0.3 : 1));
             int m = cmd.mode();
             if (m == 0) { mc.player.connection.sendCommand("sell hand"); return; }
             if (m == 1) { mc.player.connection.sendCommand("sell all"); return; }
@@ -279,7 +307,7 @@ public final class NewModules {
                     if (i < 9) inv.setSelectedSlot(i);
                     else mc.gameMode.handleInventoryMouseClick(mc.player.inventoryMenu.containerId, i,
                             inv.getSelectedSlot(), ClickType.SWAP, mc.player);
-                    t = (int) (interval.num() * 20) - 6; // fire again in a few ticks once it's in hand
+                    t = nextAt - 6; // fire again in a few ticks once it's in hand
                     return;
                 }
                 return; // no spawners left
@@ -291,24 +319,53 @@ public final class NewModules {
 
     // ======================= AUTO MINER (bot) =======================
     /**
-     * Digs for you: straight tunnel, staircase down, or staircase up. Auto-picks the best tool,
-     * stops at lava/water, low health, or when another player shows up.
+     * Digs for you. Target "Facing direction": tunnel / stairs the way you face.
+     * Target "Coordinates": digs an L-shaped route to X/Y/Z (stairs down/up to match height, shaft straight down
+     * when you're above the spot). Set the coords with the sliders (scroll = +-1, Shift+scroll = 100, Ctrl+scroll = 1000),
+     * the "Set target to my position" button, or the chat command: /krypton mine <x> <y> <z>   (or <x> <z>, or stop).
+     * Auto-picks the best tool; stops at lava/water, low health, or when another player shows up.
      */
     public static class AutoMiner extends Module {
-        final Setting mode = mode("Mode", 0, "Tunnel forward", "Stairs down", "Stairs up");
+        final Setting source = mode("Target", 0, "Facing direction", "Coordinates");
+        final Setting mode = mode("Style (facing)", 0, "Tunnel forward", "Stairs down", "Stairs up");
+        final Setting tx = num("Target X", 0, -30_000_000, 30_000_000);
+        final Setting ty = num("Target Y", 64, -64, 320);
+        final Setting tz = num("Target Z", 0, -30_000_000, 30_000_000);
+        final Setting here = button("Set target to my position", () -> {
+            if (mc.player != null) {
+                tx.value = mc.player.getBlockX(); ty.value = mc.player.getBlockY(); tz.value = mc.player.getBlockZ();
+                source.value = 1;
+                Notifications.push("Target set: " + (int) tx.value + " " + (int) ty.value + " " + (int) tz.value, Theme.accent());
+            }
+        });
         final Setting stopFluid = bool("Stop at lava/water", true);
         final Setting stopPlayer = bool("Stop if player near", true);
         final Setting minHp = num("Stop below HP", 8, 1, 19);
         Direction dir;
         BlockPos target;
+        int pause;
 
-        AutoMiner() { super("AutoMiner", "Player"); persistEnabled = false; }
+        AutoMiner() {
+            super("AutoMiner", "Player");
+            persistEnabled = false;
+            tx.step = 1; tz.step = 1; ty.step = 1;
+        }
+
+        /** Used by /krypton mine. Starts (or retargets) a coordinate dig. */
+        public void goTo(int x, int y, int z) {
+            tx.value = x; ty.value = y; tz.value = z;
+            source.value = 1;
+            if (!enabled) toggle();
+            else { target = null; if (mc.player != null) dir = mc.player.getDirection(); }
+        }
 
         @Override public void onEnable() {
             if (mc.player == null) { enabled = false; return; }
             dir = mc.player.getDirection();
             target = null;
-            Modules.chat("AutoMiner digging " + dir.getName());
+            if (source.mode() == 1)
+                Modules.chat("AutoMiner heading to " + (int) tx.value + " " + (int) ty.value + " " + (int) tz.value);
+            else Modules.chat("AutoMiner digging " + dir.getName());
         }
         @Override public void onDisable() { release(); }
 
@@ -322,7 +379,7 @@ public final class NewModules {
             enabled = false;
             release();
             Modules.chat("AutoMiner stopped: " + why);
-            Notifications.push("AutoMiner stopped: " + why, 0xFFFF5555);
+            Notifications.push("AutoMiner: " + why, 0xFFFF5555);
         }
 
         boolean fluid(BlockPos p) {
@@ -330,19 +387,43 @@ public final class NewModules {
             return fs.is(FluidTags.LAVA) || fs.is(FluidTags.WATER);
         }
 
+        /** Choose a cardinal direction toward the target; stay on the current one while it still helps. */
+        void pickDir(int dx, int dz) {
+            boolean keep = (dir.getAxis() == Direction.Axis.X && dx != 0 && Integer.signum(dx) == dir.getStepX())
+                    || (dir.getAxis() == Direction.Axis.Z && dz != 0 && Integer.signum(dz) == dir.getStepZ());
+            if (keep) return;
+            if (dx != 0 && (Math.abs(dx) >= Math.abs(dz) || dz == 0)) dir = dx > 0 ? Direction.EAST : Direction.WEST;
+            else if (dz != 0) dir = dz > 0 ? Direction.SOUTH : Direction.NORTH;
+        }
+
         @Override public void onTick() {
             if (mc.player == null || mc.level == null || mc.gameMode == null || dir == null) return;
             if (mc.screen != null) { release(); return; }
             if (mc.player.getHealth() <= minHp.num()) { halt("health low"); return; }
+            if (pause > 0) { pause--; return; }
+            if (Humanizer.on() && Humanizer.chance(0.008)) { release(); pause = 6 + Humanizer.R.nextInt(30); return; }
             if (stopPlayer.on()) {
                 for (Entity e : mc.level.entitiesForRendering())
                     if (e instanceof Player p && p != mc.player && mc.player.distanceTo(p) < 24) { halt(p.getName().getString() + " nearby"); return; }
             }
 
             BlockPos feet = mc.player.blockPosition();
+            int style = mode.mode();
+            boolean shaft = false;
+            if (source.mode() == 1) {
+                int dx = (int) tx.value - feet.getX(), dz = (int) tz.value - feet.getZ(), dy = (int) ty.value - feet.getY();
+                if (Math.abs(dx) <= 1 && Math.abs(dz) <= 1 && Math.abs(dy) <= 1) { halt("arrived!"); return; }
+                if (dx == 0 && dz == 0) {
+                    if (dy < 0) shaft = true;
+                    else { halt("target is straight above you, stand next to it first"); return; }
+                } else pickDir(dx, dz);
+                style = dy < 0 ? 1 : dy > 0 ? 2 : 0;
+            }
+
             BlockPos front = feet.relative(dir);
             List<BlockPos> clear = new ArrayList<>();
-            switch (mode.mode()) {
+            if (shaft) clear.add(feet.below());
+            else switch (style) {
                 case 1 -> { clear.add(front.above()); clear.add(front); clear.add(front.below()); }
                 case 2 -> { clear.add(feet.above(2)); clear.add(front.above()); clear.add(front.above(2)); }
                 default -> { clear.add(front); clear.add(front.above()); }
@@ -361,12 +442,12 @@ public final class NewModules {
                 return;
             }
 
-            // path is clear: walk
-            mc.player.setYRot(dir.toYRot());
-            mc.player.setXRot(0);
+            // path is clear
             target = null;
+            if (shaft) { release(); return; }   // just drop down the hole
+            Humanizer.aim(new float[]{dir.toYRot(), 0f}, 0.4);
             mc.options.keyUp.setDown(true);
-            mc.options.keyJump.setDown(mode.mode() == 2);
+            mc.options.keyJump.setDown(style == 2);
         }
 
         void mine(BlockPos p, BlockState st) {
@@ -374,9 +455,8 @@ public final class NewModules {
             mc.options.keyJump.setDown(false);
             Vec3 center = Vec3.atCenterOf(p);
             Vec3 eye = mc.player.getEyePosition();
-            float[] r = Targets.rotations(eye, center);
-            mc.player.setYRot(r[0]);
-            mc.player.setXRot(r[1]);
+            float rem = Humanizer.aim(Targets.rotations(eye, center), 0.5);
+            if (Humanizer.on() && rem > 12) return;
 
             var inv = mc.player.getInventory();
             int best = inv.getSelectedSlot();

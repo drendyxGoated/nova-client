@@ -2,11 +2,13 @@ package dev.nova;
 
 /** The "Settings" tab: theme + HUD customization. Not a real module (no on/off). */
 public class ClientSettings extends Module {
-    final Setting theme = mode("Theme", 0, "Blue", "Purple", "Pink", "Red", "Orange", "Green", "Cyan", "Rainbow", "Custom");
+    final Setting theme = mode("Theme", 0, "Dark Green", "Blue", "Purple", "Pink", "Red", "Orange", "Cyan", "Rainbow", "Custom");
     final Setting hue = num("Custom hue", 210, 0, 360);
     final Setting opacity = num("GUI opacity", 92, 40, 100);
     final Setting radius = num("Corner radius", 3, 0, 6);
     final Setting rowSize = mode("Row size", 1, "Compact", "Normal", "Large");
+    final Setting humanize = bool("Humanize bots/aura", true);
+    final Setting maxShapes = num("Max ESP shapes", 150, 30, 500);
     final Setting anims = bool("Animations", true);
     final Setting dim = bool("Dim background", true);
     final Setting notifs = bool("Notifications", true);

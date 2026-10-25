@@ -1,7 +1,10 @@
 package dev.nova;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -33,33 +36,91 @@ public class Nova implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
             while (openGui.consumeClick()) mc.setScreen(new ClickGui());
             binds.forEach((m, k) -> { while (k.consumeClick()) m.toggle(); });
-            if (mc.player == null || mc.level == null) return;
-            for (Module m : Modules.ALL) if (m.enabled) m.onTick();
+            if (mc.player == null || mc.level == null) {
+                // left the world: stop one-shot bots/camera so they can't carry over
+                NewModules.Freecam.active = false;
+                for (Module m : Modules.ALL)
+                    if (!m.persistEnabled && m.enabled) { m.enabled = false; try { m.onDisable(); } catch (Throwable ignored) {} }
+                return;
+            }
+            for (Module m : Modules.ALL) if (m.enabled) safeTick(m);
         });
 
         ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> Config.save());
+
+        // /krypton mine <x> <y> <z>   |   /krypton mine <x> <z>   |   /krypton mine stop
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
+            dispatcher.register(ClientCommandManager.literal("krypton")
+                .then(ClientCommandManager.literal("mine")
+                    .then(ClientCommandManager.literal("stop").executes(ctx -> {
+                        NewModules.AutoMiner am = miner();
+                        if (am != null && am.enabled) am.toggle();
+                        return 1;
+                    }))
+                    .then(ClientCommandManager.argument("x", IntegerArgumentType.integer())
+                        .then(ClientCommandManager.argument("a", IntegerArgumentType.integer())
+                            .executes(ctx -> {
+                                NewModules.AutoMiner am = miner();
+                                if (am == null || Minecraft.getInstance().player == null) return 0;
+                                am.goTo(IntegerArgumentType.getInteger(ctx, "x"), Minecraft.getInstance().player.getBlockY(),
+                                        IntegerArgumentType.getInteger(ctx, "a"));
+                                return 1;
+                            })
+                            .then(ClientCommandManager.argument("b", IntegerArgumentType.integer())
+                                .executes(ctx -> {
+                                    NewModules.AutoMiner am = miner();
+                                    if (am == null) return 0;
+                                    am.goTo(IntegerArgumentType.getInteger(ctx, "x"), IntegerArgumentType.getInteger(ctx, "a"),
+                                            IntegerArgumentType.getInteger(ctx, "b"));
+                                    return 1;
+                                })))))));
 
         HudRenderCallback.EVENT.register((g, tracker) -> {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player == null || mc.level == null || mc.options.hideGui) return;
             float pt = tracker.getGameTimeDeltaPartialTick(false);
 
-            for (Module m : Modules.ALL) if (m.enabled) m.onRender(g, pt);
+            for (Module m : Modules.ALL) if (m.enabled) safeRender(m, g, pt);
 
+            try {
             ClientSettings cs = Modules.CLIENT;
             int accent = Theme.accent(), accent2 = Theme.accent2();
 
             if (cs.watermark.on()) {
-                int w = mc.font.width("NOVA") + 8 + 8;
+                int w = mc.font.width("KRYPTON") + 8 + 8;
                 Ui.round(g, 3, 3, 3 + w + 22, 15, 3, 0xAA101015);
                 Ui.round(g, 3, 3, 5, 15, 1, accent);
-                Ui.gradientText(g, mc.font, "NOVA", 9, 5, accent, accent2, 1f, 1);
-                g.drawString(mc.font, "1.2", 9 + w - 6, 5, 0xFF8A8A96);
+                Ui.gradientText(g, mc.font, "KRYPTON", 9, 5, 0xFF12A04A, 0xFF0B7A36, 1f, 1);
+                g.drawString(mc.font, "1.3", 9 + w - 6, 5, 0xFF8A8A96);
             }
 
             if (cs.arrayOn.on()) drawModuleList(g, mc, cs, accent, accent2);
             Notifications.render(g, mc);
+            } catch (Throwable t) { System.err.println("[Krypton] HUD error: " + t); }
         });
+    }
+
+    private static NewModules.AutoMiner miner() {
+        for (Module m : Modules.ALL) if (m instanceof NewModules.AutoMiner am) return am;
+        return null;
+    }
+
+    // A bug in one module must never take the whole game down: turn that module off and keep going.
+    private static void safeTick(Module m) {
+        try { m.onTick(); } catch (Throwable t) { fail(m, "tick", t); }
+    }
+
+    private static void safeRender(Module m, GuiGraphics g, float pt) {
+        try { m.onRender(g, pt); } catch (Throwable t) { fail(m, "render", t); }
+    }
+
+    private static void fail(Module m, String where, Throwable t) {
+        m.enabled = false;
+        try { m.onDisable(); } catch (Throwable ignored) {}
+        System.err.println("[Krypton] " + m.name + " crashed in " + where + ": " + t);
+        t.printStackTrace();
+        Notifications.push(m.name + " turned off (error)", 0xFFFF5555);
+        Modules.chat("§c" + m.name + " hit an error in " + where + " and was turned off (" + t.getClass().getSimpleName() + ")");
     }
 
     private static void drawModuleList(GuiGraphics g, Minecraft mc, ClientSettings cs, int accent, int accent2) {

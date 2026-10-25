@@ -7,6 +7,7 @@ public class Setting {
     public double value;
     public final double min, max;
     public double step;
+    public Runnable action;   // non-null = a button
 
     public Setting(String name, boolean def) {
         this.name = name; this.isBool = true; this.modes = null;
@@ -21,6 +22,12 @@ public class Setting {
         this.value = def; this.min = 0; this.max = modes.length - 1; this.step = 1;
     }
 
+    public Setting(String name, Runnable action) {
+        this.name = name; this.isBool = false; this.modes = null; this.action = action;
+        this.value = 0; this.min = 0; this.max = 1; this.step = 1;
+    }
+
+    public boolean isButton() { return action != null; }
     public boolean isMode() { return modes != null; }
     public int mode() { return (int) value; }
     public String modeName() { return modes[Math.max(0, Math.min(modes.length - 1, (int) value))]; }

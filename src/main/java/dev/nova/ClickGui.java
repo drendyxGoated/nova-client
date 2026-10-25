@@ -15,7 +15,7 @@ public class ClickGui extends Screen {
     private static final int PANEL = 0xFF15151B, SIDE = 0xFF0E0E13, CARD = 0xFF1D1D25, CARD_HOVER = 0xFF262631, SUB = 0xFF181820;
 
     private record Hit(int x, int y, int w, int h, int type, Module m, Setting s, int idx) {}
-    // types: 0 module row, 1 bool, 2 slider, 3 mode, 4 category tab
+    // types: 0 module row, 1 bool, 2 slider, 3 mode, 4 category tab, 5 button
 
     private final List<Hit> hits = new ArrayList<>();
     private final long openAt = System.currentTimeMillis();
@@ -24,7 +24,7 @@ public class ClickGui extends Screen {
     private int contentH = 0, viewY1 = 0, viewY2 = 0;
     private Hit dragging;
 
-    public ClickGui() { super(Component.literal("Nova")); }
+    public ClickGui() { super(Component.literal("Krypton")); }
 
     @Override public boolean isPauseScreen() { return false; }
     @Override public void removed() { Config.save(); }
@@ -47,6 +47,17 @@ public class ClickGui extends Screen {
     }
 
     @Override public void render(GuiGraphics g, int mx, int my, float delta) {
+        try {
+            draw(g, mx, my);
+        } catch (Throwable t) {
+            System.err.println("[Krypton] GUI error: " + t);
+            t.printStackTrace();
+            Notifications.push("GUI error, closed (see log)", 0xFFFF5555);
+            onClose();
+        }
+    }
+
+    private void draw(GuiGraphics g, int mx, int my) {
         ClientSettings cs = Modules.CLIENT;
         float f = fade();
         int rad = (int) cs.radius.num();
@@ -71,7 +82,7 @@ public class ClickGui extends Screen {
         g.fill(x0 + SB - rad - 1, y0, x0 + SB, y0 + H, Ui.fade(SIDE, op));
         g.fill(x0 + SB, y0, x0 + SB + 1, y0 + H, Ui.fade(0xFF23232C, f));
 
-        Ui.gradientText(g, font, "NOVA", x0 + 18, y0 + 14, accent, accent2, f, 2);
+        Ui.gradientText(g, font, "KRYPTON", x0 + 18, y0 + 14, 0xFF12A04A, 0xFF0B7A36, f, 2);
         g.drawString(font, "client", x0 + 19, y0 + 26, Ui.fade(0xFF70707C, f));
 
         int cy = y0 + 52;
@@ -82,7 +93,9 @@ public class ClickGui extends Screen {
             if (sel) Ui.round(g, x0 + 8, cy, x0 + SB - 8, cy + 22, rad, Ui.fade(Ui.withAlpha(accent, 45), f));
             else if (hover) Ui.round(g, x0 + 8, cy, x0 + SB - 8, cy + 22, rad, Ui.fade(0xFF1A1A22, f));
             if (sel) Ui.round(g, x0 + 8, cy + 4, x0 + 11, cy + 18, 1, Ui.fade(accent, f));
-            g.drawString(font, c, x0 + 20, cy + 7, Ui.fade(sel ? 0xFFFFFFFF : 0xFF9A9AA8, f));
+            Ui.round(g, x0 + 16, cy + 4, x0 + 30, cy + 18, 3, Ui.fade(sel ? accent : 0xFF2A2A34, f));
+            g.drawString(font, c.substring(0, 1), x0 + 21, cy + 7, Ui.fade(sel ? 0xFF101015 : 0xFF9A9AA8, f));
+            g.drawString(font, c, x0 + 36, cy + 7, Ui.fade(sel ? 0xFFFFFFFF : 0xFF9A9AA8, f));
             if (!c.equals("Settings")) {
                 int on = 0;
                 for (Module m : modulesOf(c)) if (m.enabled) on++;
@@ -101,7 +114,8 @@ public class ClickGui extends Screen {
         g.fill(cx1, y0 + 30, cx2, y0 + 31, Ui.fade(Ui.withAlpha(accent, 90), f));
 
         int vx1 = x0 + SB + 12, vx2 = x0 + W - 12;
-        viewY1 = y0 + 38; viewY2 = y0 + H - 10;
+        viewY1 = y0 + 38; viewY2 = y0 + H - 30;
+        String hoverDesc = null;
         int cw = vx2 - vx1;
         double maxScroll = Math.max(0, contentH - (viewY2 - viewY1));
         scroll = Mth.clamp(scroll, -maxScroll, 0);
@@ -125,12 +139,22 @@ public class ClickGui extends Screen {
                 if (!m.settings.isEmpty())
                     g.drawString(font, m.expanded ? "v" : ">", sx - 14, y + (rowH - 8) / 2, Ui.fade(0xFF70707C, f));
 
+                if (hover) hoverDesc = Descriptions.get(m.name);
                 hits.add(new Hit(vx1, y, cw, rowH, 0, m, null, 0));
                 y += rowH + 3;
             }
             if (m.expanded || m.hidden) {
                 for (Setting s : m.settings) {
                     int sx1 = vx1 + 8, sx2 = vx2 - 8, sw2 = sx2 - sx1;
+                    if (s.isButton()) {
+                        int hh = 22;
+                        boolean bh = Ui.in(mx, my, sx1, y, sw2, hh) && my >= viewY1 && my < viewY2;
+                        Ui.round(g, sx1, y, sx2, y + hh, rad, Ui.fade(Ui.withAlpha(accent, bh ? 110 : 70), f));
+                        g.drawString(font, s.name, sx1 + (sw2 - font.width(s.name)) / 2, y + 7, Ui.fade(0xFFFFFFFF, f));
+                        hits.add(new Hit(sx1, y, sw2, hh, 5, m, s, 0));
+                        y += hh + 2;
+                        continue;
+                    }
                     if (s.isMode()) {
                         int hh = 20;
                         Ui.round(g, sx1, y, sx2, y + hh, rad, Ui.fade(SUB, op));
@@ -171,6 +195,9 @@ public class ClickGui extends Screen {
             }
         }
         g.disableScissor();
+        Ui.round(g, vx1, y0 + H - 26, vx2, y0 + H - 8, rad, Ui.fade(0xFF111116, op));
+        String tip = hoverDesc != null ? hoverDesc : "Left-click: toggle     Right-click: settings     Scroll over a slider: fine tune";
+        g.drawString(font, tip, vx1 + 8, y0 + H - 21, Ui.fade(hoverDesc != null ? 0xFFC8C8D2 : 0xFF6A6A76, f));
         contentH = y - (viewY1 + (int) scroll) + 4;
     }
 
@@ -196,6 +223,7 @@ public class ClickGui extends Screen {
                 }
                 case 1 -> h.s.flip();
                 case 3 -> h.s.cycle();
+                case 5 -> h.s.action.run();
                 case 2 -> { dragging = h; setSlider(h, mx); }
                 default -> {}
             }
@@ -219,7 +247,12 @@ public class ClickGui extends Screen {
     public boolean mouseScrolled(double mx, double my, double scrollX, double scrollY) {
         for (Hit h : hits) {
             if (h.type == 2 && Ui.in(mx, my, h.x, h.y, h.w, h.h) && my >= viewY1 && my < viewY2) {
-                h.s.value = Mth.clamp(h.s.value + Math.signum(scrollY) * h.s.step, h.s.min, h.s.max);
+                double mult = 1;
+                if (h.s.step == 1 && h.s.max - h.s.min > 1000) {
+                    var o = net.minecraft.client.Minecraft.getInstance().options;
+                    mult = o.keySprint.isDown() ? 1000 : o.keyShift.isDown() ? 100 : 1;
+                }
+                h.s.value = Mth.clamp(h.s.value + Math.signum(scrollY) * h.s.step * mult, h.s.min, h.s.max);
                 return true;
             }
         }

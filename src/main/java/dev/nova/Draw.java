@@ -41,20 +41,39 @@ public final class Draw {
     }
 
     public static void outline(GuiGraphics g, double[] r, int color) {
-        int x1 = (int) r[0], y1 = (int) r[1], x2 = (int) r[2], y2 = (int) r[3];
+        int w = g.guiWidth(), h = g.guiHeight();
+        if (r[2] < 0 || r[0] > w || r[3] < 0 || r[1] > h) return;           // fully offscreen
+        if (r[2] - r[0] > 3000 || r[3] - r[1] > 3000) return;                // absurdly big (camera inside it)
+        int x1 = (int) Math.max(-4, r[0]), y1 = (int) Math.max(-4, r[1]);
+        int x2 = (int) Math.min(w + 4, r[2]), y2 = (int) Math.min(h + 4, r[3]);
         g.fill(x1, y1, x2, y1 + 1, color);
         g.fill(x1, y2 - 1, x2, y2, color);
         g.fill(x1, y1, x1 + 1, y2, color);
         g.fill(x2 - 1, y1, x2, y2, color);
     }
 
+    /** Line clipped to the screen (Liang-Barsky), drawn with a 2px stride and a hard cap on fills. */
     public static void line(GuiGraphics g, double x1, double y1, double x2, double y2, int color) {
-        double dx = x2 - x1, dy = y2 - y1;
-        int steps = (int) Math.min(2000, Math.max(Math.abs(dx), Math.abs(dy)));
-        if (steps == 0) return;
+        int w = g.guiWidth(), h = g.guiHeight();
+        double dx = x2 - x1, dy = y2 - y1, t0 = 0, t1 = 1;
+        double[] p = {-dx, dx, -dy, dy};
+        double[] q = {x1, w - x1, y1, h - y1};
+        for (int i = 0; i < 4; i++) {
+            if (p[i] == 0) { if (q[i] < 0) return; }
+            else {
+                double r = q[i] / p[i];
+                if (p[i] < 0) { if (r > t1) return; if (r > t0) t0 = r; }
+                else { if (r < t0) return; if (r < t1) t1 = r; }
+            }
+        }
+        double ax = x1 + t0 * dx, ay = y1 + t0 * dy, bx = x1 + t1 * dx, by = y1 + t1 * dy;
+        double len = Math.hypot(bx - ax, by - ay);
+        if (len < 1) return;
+        int steps = (int) Math.min(len / 2, 400);
         for (int i = 0; i <= steps; i++) {
-            int x = (int) (x1 + dx * i / steps), y = (int) (y1 + dy * i / steps);
-            g.fill(x, y, x + 1, y + 1, color);
+            double t = steps == 0 ? 0 : i / (double) steps;
+            int x = (int) (ax + (bx - ax) * t), y = (int) (ay + (by - ay) * t);
+            g.fill(x, y, x + 2, y + 2, color);
         }
     }
 }

@@ -50,6 +50,7 @@ public final class Modules {
         MoreModules.register();
         ExtraModules.register();
         NewModules.register();
+        BuildModules.register();
         CLIENT = new ClientSettings();
         ALL.add(CLIENT);
     }
@@ -61,8 +62,10 @@ public final class Modules {
     // ---------- helpers ----------
     static void chat(String msg) {
         if (Module.mc.player != null)
-            Module.mc.player.displayClientMessage(Component.literal("§b[Nova]§r " + msg), false);
+            Module.mc.player.displayClientMessage(Component.literal("§2[Krypton]§r " + msg), false);
     }
+
+    static int cap() { return CLIENT == null ? 150 : (int) CLIENT.maxShapes.num(); }
 
     static String dim() {
         String d = Module.mc.level.dimension().toString();
@@ -163,7 +166,10 @@ public final class Modules {
         final Setting lowestHp = bool("Lowest HP first", false);
         final Setting walls = bool("Through walls", false);
         final Setting rotate = bool("Rotate", true);
+        final Setting aimSpeed = num("Aim speed", 0.45, 0.1, 1.0);
+        final Setting miss = num("Miss chance %", 4, 0, 30);
         final Targets.Filter filter;
+        int hold;
 
         KillAura() {
             super("KillAura", "Combat");
@@ -186,12 +192,18 @@ public final class Modules {
             if (best == null) return;
 
             if (rotate.on()) {
-                float[] r = Targets.rotations(mc.player.getEyePosition(), best.getBoundingBox().getCenter());
-                mc.player.setYRot(r[0]);
-                mc.player.setXRot(r[1]);
+                float rem = Humanizer.aim(Targets.rotations(mc.player.getEyePosition(), best.getBoundingBox().getCenter()), aimSpeed.num());
+                if (Humanizer.on() && rem > 14) return;
+            }
+            if (hold > 0) { hold--; return; }
+            if (Humanizer.on() && Humanizer.chance(miss.num() / 100.0)) {
+                mc.player.swing(InteractionHand.MAIN_HAND);
+                hold = 1 + Humanizer.R.nextInt(3);
+                return;
             }
             mc.gameMode.attack(mc.player, best);
             mc.player.swing(InteractionHand.MAIN_HAND);
+            hold = Humanizer.on() ? Humanizer.R.nextInt(3) : 0;
         }
     }
 
@@ -236,12 +248,15 @@ public final class Modules {
         }
 
         @Override public void onRender(GuiGraphics g, float pt) {
+            int drawn = 0;
             for (Entity e : mc.level.entitiesForRendering()) {
                 if (e == mc.player || !filter.accepts(e)) continue;
                 double dist = mc.player.distanceTo(e);
                 if (dist > range.num()) continue;
+                if (drawn >= cap()) break;
                 double[] r = Draw.rect(e.getBoundingBox(), g, pt);
                 if (r == null) continue;
+                drawn++;
                 int color = Targets.color(Targets.kind(e));
                 Draw.outline(g, r, color);
                 if (labels.on())
@@ -266,8 +281,11 @@ public final class Modules {
 
         @Override public void onRender(GuiGraphics g, float pt) {
             double max = range.num() * range.num();
+            int drawn = 0;
             for (BlockEntity be : cache) {
+                if (drawn >= cap()) break;
                 if (be.isRemoved() || be.getBlockPos().distSqr(mc.player.blockPosition()) > max) continue;
+                drawn++;
                 double[] r = Draw.rect(new AABB(be.getBlockPos()), g, pt);
                 if (r != null) Draw.outline(g, r, storageColor(be));
             }
@@ -284,8 +302,10 @@ public final class Modules {
 
         @Override public void onRender(GuiGraphics g, float pt) {
             double cx = g.guiWidth() / 2.0, cy = g.guiHeight() / 2.0;
+            int drawn = 0;
             for (Entity e : mc.level.entitiesForRendering()) {
                 if (e == mc.player || !filter.accepts(e)) continue;
+                if (drawn++ >= 40) break;
                 double[] s = Draw.project(e.getBoundingBox().getCenter(), g, pt);
                 if (s == null) continue;
                 int c = (Targets.color(Targets.kind(e)) & 0x00FFFFFF) | 0xCC000000;

@@ -5,7 +5,7 @@ import net.minecraft.util.Mth;
 /** Accent colors driven by the Client settings tab. */
 public final class Theme {
     private Theme() {}
-    static final float[] PRESET_HUE = {215, 270, 320, 355, 25, 140, 185};
+    static final float[] PRESET_HUE = {145, 215, 270, 320, 355, 25, 185};
 
     static int hueColor(float hueDeg, float s, float v) {
         float h = (((hueDeg % 360f) + 360f) % 360f) / 360f;
@@ -21,8 +21,9 @@ public final class Theme {
         return (float) c.hue.num();
     }
 
-    public static int accent() { return hueColor(baseHue(), 0.62f, 1f); }
-    public static int accent2() { return hueColor(baseHue() + 40f, 0.62f, 1f); }
+    static boolean darkGreen() { return Modules.CLIENT != null && Modules.CLIENT.theme.mode() == 0; }
+    public static int accent() { return darkGreen() ? hueColor(145f, 0.85f, 0.72f) : hueColor(baseHue(), 0.62f, 1f); }
+    public static int accent2() { return darkGreen() ? hueColor(125f, 0.85f, 0.55f) : hueColor(baseHue() + 40f, 0.62f, 1f); }
     public static int rainbow(float offset) { return hueColor((System.currentTimeMillis() / 20) % 360 + offset * 360f, 0.6f, 1f); }
     public static boolean anim() { return Modules.CLIENT == null || Modules.CLIENT.anims.on(); }
 }

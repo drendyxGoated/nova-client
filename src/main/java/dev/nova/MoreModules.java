@@ -78,7 +78,7 @@ public final class MoreModules {
                 if (inv.getItem(i).is(Items.TOTEM_OF_UNDYING)) {
                     int slot = i < 9 ? 36 + i : i; // inventory menu slot ids
                     mc.gameMode.handleInventoryMouseClick(mc.player.inventoryMenu.containerId, slot, 40, ClickType.SWAP, mc.player);
-                    cd = (int) delay.num();
+                    cd = (int) delay.num() + (Humanizer.on() ? Humanizer.R.nextInt(3) : 0);
                     return;
                 }
             }
@@ -225,7 +225,7 @@ public final class MoreModules {
         AntiAFK() { super("AntiAFK", "Player"); }
         @Override public void onTick() {
             if (mc.player == null || ++t < interval.num() * 20) return;
-            t = 0;
+            t = -Humanizer.R.nextInt(200);
             mc.player.swing(InteractionHand.MAIN_HAND);
             mc.player.setYRot(mc.player.getYRot() + (new Random().nextBoolean() ? 5 : -5));
             if (mc.player.onGround()) mc.player.jumpFromGround();
