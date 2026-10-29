@@ -64,7 +64,7 @@ public final class ExtraModules {
             if (onlyAttack.on() && !mc.options.keyAttack.isDown()) return;
             Entity best = null; double bd = 1e9;
             for (Entity e : mc.level.entitiesForRendering()) {
-                if (e == mc.player || !(e instanceof LivingEntity le) || !le.isAlive() || !filter.accepts(e)) continue;
+                if (e == mc.player || !(e instanceof LivingEntity le) || !le.isAlive() || !filter.accepts(e) || Friends.is(e)) continue;
                 double d = mc.player.distanceTo(e);
                 if (d > range.num() || d >= bd || !mc.player.hasLineOfSight(e)) continue;
                 best = e; bd = d;
@@ -448,7 +448,9 @@ public final class ExtraModules {
     public static class HUD extends Module {
         final Setting coords = bool("Coordinates", true), nether = bool("Nether coords", true), dir = bool("Direction", true),
                 fps = bool("FPS", true), ping = bool("Ping", true), spd = bool("Speed (b/s)", true),
-                totems = bool("Totem count", true), clock = bool("Clock", false);
+                totems = bool("Totem count", true), clock = bool("Clock", false),
+                session = bool("Session time", false), server = bool("Server", false), light = bool("Light level", false);
+        static final long START = System.currentTimeMillis();
 
         HUD() { super("HUD", "HUD"); enabled = true; }
 
@@ -474,6 +476,12 @@ public final class ExtraModules {
                 lines.add("Totems " + n);
             }
             if (clock.on()) lines.add(java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
+            if (session.on()) {
+                long sec = (System.currentTimeMillis() - START) / 1000;
+                lines.add(String.format("Session %d:%02d:%02d", sec / 3600, (sec / 60) % 60, sec % 60));
+            }
+            if (server.on()) lines.add(mc.getCurrentServer() == null ? "Singleplayer" : mc.getCurrentServer().ip);
+            if (light.on()) lines.add("Light " + mc.level.getMaxLocalRawBrightness(p.blockPosition()));
             int y = 22;
             for (String l : lines) { g.drawString(mc.font, l, 4, y, 0xFFFFFFFF); y += 10; }
         }
@@ -505,7 +513,7 @@ public final class ExtraModules {
                 double ys = dx * (-sy) + dz * cyw;
                 int px = cx + (int) (xs / range.num() * half), py = cy - (int) (ys / range.num() * half);
                 if (px < x0 + 1 || px > x0 + s - 3 || py < y0 + 1 || py > y0 + s - 3) continue;
-                g.fill(px, py, px + 3, py + 3, Targets.color(Targets.kind(e)));
+                g.fill(px, py, px + 3, py + 3, Targets.colorOf(e));
             }
             g.fill(cx - 1, cy - 1, cx + 2, cy + 2, 0xFFFFFFFF);
         }

@@ -75,6 +75,15 @@ AutoDrop|Throws away junk items
 HoleESP|Shows safe bedrock/obsidian holes
 AutoCommand|Runs a command on a timer (/rtp, /home...)
 AutoFarm|Harvests mature crops in reach and replants
+Waypoints|Labels in the world for saved spots. /krypton waypoint add <name>
+Search|Highlights any blocks you pick: /krypton esp add <block>
+BlockEntityESP|Beds, beacons, enchanting tables, furnaces, signs...
+ChunkBorders|Shows the edges of the chunk you're in
+Nearby|List of nearby players with health and distance
+AutoMend|Throws XP bottles at your feet to repair armor
+VehicleFly|Faster boats/horses and flying vehicles
+Nuker|Mines the nearest matching block in reach
+Macro|Sends a message or command on a timer: /krypton macro <sec> <text>
 """;
 
     static {

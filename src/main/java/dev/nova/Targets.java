@@ -49,6 +49,9 @@ public final class Targets {
         };
     }
 
+    /** Friends are cyan everywhere. */
+    public static int colorOf(Entity e) { return Friends.is(e) ? 0xFF55FFFF : color(kind(e)); }
+
     /** {yaw, pitch} needed to look from eye at target. */
     public static float[] rotations(Vec3 eye, Vec3 t) {
         double dx = t.x - eye.x, dy = t.y - eye.y, dz = t.z - eye.z;

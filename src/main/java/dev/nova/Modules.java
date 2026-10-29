@@ -51,6 +51,7 @@ public final class Modules {
         ExtraModules.register();
         NewModules.register();
         BuildModules.register();
+        MegaModules.register();
         CLIENT = new ClientSettings();
         ALL.add(CLIENT);
     }
@@ -182,7 +183,7 @@ public final class Modules {
 
             Entity best = null; double bestScore = Double.MAX_VALUE;
             for (Entity e : mc.level.entitiesForRendering()) {
-                if (!(e instanceof LivingEntity le) || e == mc.player || !le.isAlive() || !filter.accepts(e)) continue;
+                if (!(e instanceof LivingEntity le) || e == mc.player || !le.isAlive() || !filter.accepts(e) || Friends.is(e)) continue;
                 double d = mc.player.distanceTo(e);
                 if (d > range.num()) continue;
                 if (!walls.on() && !mc.player.hasLineOfSight(e)) continue;
@@ -220,7 +221,7 @@ public final class Modules {
                 if (!(e instanceof Player p) || p == mc.player || mc.player.distanceTo(p) > range.num()) continue;
                 double[] r = Draw.rect(p.getBoundingBox(), g, pt);
                 if (r == null) continue;
-                Draw.outline(g, r, 0xFFFF3030);
+                Draw.outline(g, r, Friends.is(p) ? 0xFF55FFFF : 0xFFFF3030);
                 if (health.on()) {
                     float hp = Math.max(0f, Math.min(1f, p.getHealth() / p.getMaxHealth()));
                     int bx = (int) r[0] - 4, bh = (int) (r[3] - r[1]);
@@ -257,7 +258,7 @@ public final class Modules {
                 double[] r = Draw.rect(e.getBoundingBox(), g, pt);
                 if (r == null) continue;
                 drawn++;
-                int color = Targets.color(Targets.kind(e));
+                int color = Targets.colorOf(e);
                 Draw.outline(g, r, color);
                 if (labels.on())
                     g.drawString(mc.font, e.getName().getString() + " " + (int) dist + "m", (int) r[0], (int) r[1] - 10, color);
@@ -308,7 +309,7 @@ public final class Modules {
                 if (drawn++ >= 40) break;
                 double[] s = Draw.project(e.getBoundingBox().getCenter(), g, pt);
                 if (s == null) continue;
-                int c = (Targets.color(Targets.kind(e)) & 0x00FFFFFF) | 0xCC000000;
+                int c = (Targets.colorOf(e) & 0x00FFFFFF) | 0xCC000000;
                 Draw.line(g, cx, cy, s[0], s[1], c);
             }
         }

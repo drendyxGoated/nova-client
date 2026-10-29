@@ -48,32 +48,8 @@ public class Nova implements ClientModInitializer {
 
         ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> Config.save());
 
-        // /krypton mine <x> <y> <z>   |   /krypton mine <x> <z>   |   /krypton mine stop
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-            dispatcher.register(ClientCommandManager.literal("krypton")
-                .then(ClientCommandManager.literal("mine")
-                    .then(ClientCommandManager.literal("stop").executes(ctx -> {
-                        NewModules.AutoMiner am = miner();
-                        if (am != null && am.enabled) am.toggle();
-                        return 1;
-                    }))
-                    .then(ClientCommandManager.argument("x", IntegerArgumentType.integer())
-                        .then(ClientCommandManager.argument("a", IntegerArgumentType.integer())
-                            .executes(ctx -> {
-                                NewModules.AutoMiner am = miner();
-                                if (am == null || Minecraft.getInstance().player == null) return 0;
-                                am.goTo(IntegerArgumentType.getInteger(ctx, "x"), Minecraft.getInstance().player.getBlockY(),
-                                        IntegerArgumentType.getInteger(ctx, "a"));
-                                return 1;
-                            })
-                            .then(ClientCommandManager.argument("b", IntegerArgumentType.integer())
-                                .executes(ctx -> {
-                                    NewModules.AutoMiner am = miner();
-                                    if (am == null) return 0;
-                                    am.goTo(IntegerArgumentType.getInteger(ctx, "x"), IntegerArgumentType.getInteger(ctx, "a"),
-                                            IntegerArgumentType.getInteger(ctx, "b"));
-                                    return 1;
-                                })))))));
+        Commands.register();
+        Friends.load();
 
         HudRenderCallback.EVENT.register((g, tracker) -> {
             Minecraft mc = Minecraft.getInstance();

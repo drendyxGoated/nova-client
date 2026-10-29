@@ -59,7 +59,7 @@ public final class MoreModules {
             if (mc.player == null || mc.gameMode == null || mc.screen != null) return;
             if (!(mc.hitResult instanceof EntityHitResult ehr) || !(ehr.getEntity() instanceof LivingEntity le) || !le.isAlive()) return;
             boolean ok = (le instanceof Player && players.on()) || (le instanceof Enemy && hostiles.on());
-            if (!ok || mc.player.getAttackStrengthScale(0f) < 0.95f) return;
+            if (!ok || Friends.is(le) || mc.player.getAttackStrengthScale(0f) < 0.95f) return;
             mc.gameMode.attack(mc.player, le);
             mc.player.swing(InteractionHand.MAIN_HAND);
         }
